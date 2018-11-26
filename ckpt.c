@@ -64,6 +64,7 @@ typedef struct
 } mem_section;
 
 // synopses of functions used in "checkpoint()"
+void ckpt_memMaps();
 int _readline(int, char*);
 void fill_memsection(mem_section*, char*);
 void* hexstring_to_int(char*);
@@ -77,13 +78,14 @@ int is_vsyscall_line(char*);
 void 
 checkpoint(int signal_USR2)
 {
+  pid_t pid = getpid();
   memset(&context, 0, sizeof(context));
   if (getcontext(&context) == -1){
     perror("getcontext()");
     exit(EXIT_FAILURE);
   }
 
-  if (is_ckpt == 31){
+  if (pid == getpid()){
     int myckpt_fd;
     if ((myckpt_fd = open("myckpt", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1)
     {
@@ -280,6 +282,10 @@ fill_memsection(mem_section *msection_p, char *line)
 
   msection_p->is_stack = FALSE;
   return;
+}
+
+void ckpt_memMaps() {
+ ;
 }
 
 void* 
