@@ -30,13 +30,13 @@ void restore_memory(void){return;}
 
 // synopses of other functions used.
 int _readline(int, char*);
-void* hexstring_to_int(char *);
+char* hexstring_to_int(char *);
 int is_stack_line(char*);
 
 int main(int argc, char *argv[])
 {
   //  move this process's stack.
-  static void *new_stack_addr = (void *)0x6700100; //
+  static char *new_stack_addr = (char *)0x6700100; //
   static size_t new_stack_size = 0x6701000-0x6700000;
   if (mmap((void *)0x6700000, new_stack_size, PROT_READ|PROT_WRITE, 
       MAP_ANONYMOUS|MAP_PRIVATE, -1, 0) == (void *)-1)
@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
   // unmap the original stack.
   // read the address and size of the original stack.
   int maps_fd = open("/proc/self/maps", O_RDONLY);
-  static void *old_stack_addr;
+  static char *old_stack_addr;
   static size_t old_stack_size;
   static char line[128];
   while (_readline(maps_fd, line) != -1)
@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     if (is_stack_line(line))
     {
       char *line_p = line;
-      void *addr_begin, *addr_end;
+      char *addr_begin, *addr_end;
       char hex_str[17]; 
       char *hex_str_p = hex_str;
       memset(hex_str, 0, 17);
@@ -106,11 +106,11 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
   // read is_ckpt pointer
-  static int *is_ckpt_p;
-  if (read(myckpt_fd, &(is_ckpt_p), sizeof(is_ckpt_p)) == -1){
-    perror("read()");
-    exit(EXIT_FAILURE);
-  }
+//  static int *is_ckpt_p;
+//  if (read(myckpt_fd, &(is_ckpt_p), sizeof(is_ckpt_p)) == -1){
+//    perror("read()");
+//    exit(EXIT_FAILURE);
+//  }
   
   static int section_nbr;
   // read the magic number, the number of sections
@@ -162,16 +162,16 @@ int main(int argc, char *argv[])
     exit(EXIT_FAILURE);
   }
   // Then restart    
-  *is_ckpt_p = 0;
+//  *is_ckpt_p = 0;
   if (setcontext(&context) == -1){
     perror("setcontext()");
     exit(EXIT_FAILURE);
   }
 }
 
-void* hexstring_to_int(char *hexstring)
+char* hexstring_to_int(char *hexstring)
 {
-  void* ret_val=0;
+  char* ret_val=0;
   int base = 16;
   unsigned long long base_to_exp;
 
