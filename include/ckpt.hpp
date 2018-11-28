@@ -24,20 +24,17 @@ class miniDMTCP {
   private:
     miniDMTCP();
     ~miniDMTCP();
-  
+    void ckpt_context();
+    void ckpt_memory();
+    void ckpt_fds();           // should be a plugin
   private:
-    static int ckpt_fd;
-
+    int ckpt_fd = -1;
+    
   public:
-    static void write_context();
-    static void write_memMaps();
-    // static void write_fds(); // should be a plugin
-    static void take_checkpoint(int);
-  
+    void take_checkpoint(int);
   public:
     static miniDMTCP theInstance;
   
 };
 
 miniDMTCP miniDMTCP::theInstance;
-int miniDMTCP::ckpt_fd = -1;
