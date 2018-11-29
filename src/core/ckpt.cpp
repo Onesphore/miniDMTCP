@@ -1,5 +1,5 @@
-#include <ckpt.hpp>      // in "../include"
-#include <utils.hpp>     // in "../include"
+#include <ckpt.hpp>
+#include <utils/utils.hpp>
 
 ucontext_t context;
 
@@ -12,24 +12,24 @@ miniDMTCP::miniDMTCP() {
 
 // relinquish resources
 miniDMTCP::~miniDMTCP() {
-  if (close(ckpt_fd) == -1) {
+  if (close(ckptImage_fd) == -1) {
     ERROR("close()");
   }
 }
 
 void 
 miniDMTCP::take_checkpoint(int signal) {
-  // create a ckpt file
-  if (( ckpt_fd = open("myckpt.ckpt", O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
+  if (( ckptImage_fd = open("myckpt.ckpt", O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
     ERROR("open");
   }
-  write_context();
-  write_memMaps();
-  // write_fds();
+  ckpt_context();
+  ckpt_memory();
+//   regularFile _regularFile;
+//   _regularFile.ckpt_fds();
 }
 
 void 
-miniDMTCP::write_context() {
+miniDMTCP::ckpt_context() {
   pid_t pid = getpid();
   memset(&context, 0, sizeof(context));
   if (getcontext(&context) == -1) {
@@ -37,7 +37,7 @@ miniDMTCP::write_context() {
   }
   // to avoid taking a ckpt again on 'restart'
   if (pid == getpid()){
-    if (write(ckpt_fd, &context, sizeof(context)) == -1) {
+    if (write(ckptImage_fd, &context, sizeof(context)) == -1) {
       ERROR("write()");
     }
   }
@@ -45,19 +45,16 @@ miniDMTCP::write_context() {
 }
 
 void 
-miniDMTCP::write_memMaps() {
-    /// int myckpt_fd = ckpt_fd;
-    // open the current process("hello") mapping image
+miniDMTCP::ckpt_memory() {
     int maps_fd;
     if ((maps_fd = open("/proc/self/maps", O_RDONLY)) == -1) {
       ERROR("open()");
     } 
     // leave space for the magic number, 'number_of_mem_sections':)
-    if (lseek(ckpt_fd, sizeof(int), SEEK_CUR) == (off_t)-1) {
+    if (lseek(ckptImage_fd, sizeof(int), SEEK_CUR) == (off_t)-1) {
       ERROR("lseek()");
     }
-    // read the current process("hello") mapped memory sections
-    // and write them to the ckpt image.
+
     char line[128];
     mem_section msection;
     int section_nbr = 0;
@@ -76,14 +73,14 @@ miniDMTCP::write_memMaps() {
         continue;
       }
       section_nbr++;
-      if (write(ckpt_fd, &msection, sizeof(msection)) == -1) {
+      if (write(ckptImage_fd, &msection, sizeof(msection)) == -1) {
         ERROR("write()");
       }   
       
       int nread = 0;
       int read_total=0;
       while (read_total != msection.size){
-        if ((nread = write(ckpt_fd, msection.address+read_total, 
+        if ((nread = write(ckptImage_fd, msection.address+read_total, 
               msection.size-read_total)) == -1) {
 	  ERROR("write()");
         }
@@ -91,12 +88,12 @@ miniDMTCP::write_memMaps() {
       }
     }
 
-    if (lseek(ckpt_fd, sizeof(context), SEEK_SET) == (off_t)-1) {
+    if (lseek(ckptImage_fd, sizeof(context), SEEK_SET) == (off_t)-1) {
       ERROR("lseek()");
     } 
     // section_nbr: the number of memory sections written to 
     // the ckpt image file. Save this number also.
-    if (write(ckpt_fd, &section_nbr, sizeof(section_nbr)) == -1) {
+    if (write(ckptImage_fd, &section_nbr, sizeof(section_nbr)) == -1) {
       ERROR("write()");
     }
 
