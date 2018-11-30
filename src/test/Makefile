@@ -12,7 +12,7 @@ restart:
 check: hello
 	(sleep 3 && kill -12 `pgrep -n hello` && \
 	 sleep 2 && pkill -9 -n hello && make restart) & \
-	 sleep 12 && pkill -9 -n myrestart & \
+	 # sleep 12 && pkill -9 -n myrestart & 
 	 LD_PRELOAD=$(LIBPATH)/libckpt.so ./hello
 
 .PHONY: clean
