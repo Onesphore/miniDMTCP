@@ -1,18 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <signal.h>
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-
 #include <string.h>
-
 #include <ucontext.h>
 #include <setjmp.h>
-
 #include <limits.h>
 
 #define SIGNUM SIGUSR2 
@@ -29,6 +24,7 @@ class miniDMTCP {
     // static void ckpt_fds();           // should be a plugin
   private:
     static int ckptImage_fd;
+    int fds_num;
     
   public:
     static void take_checkpoint(int);

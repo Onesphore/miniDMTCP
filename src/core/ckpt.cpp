@@ -1,7 +1,10 @@
 #include <ckpt.hpp>
 #include <utils/utils.hpp>
+#include <regularFile/regularFD.hpp>
 
 ucontext_t context;
+
+// FIXME: member variables initialization please!
 
 // miniDMTCP class member functions definition
 miniDMTCP::miniDMTCP() {
@@ -19,13 +22,26 @@ miniDMTCP::~miniDMTCP() {
 
 void 
 miniDMTCP::take_checkpoint(int signal) {
+  off_t fds_num_offset = 0;
+  off_t fds_metadata_offset = 0;
   if (( ckptImage_fd = open("myckpt.ckpt", O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
     ERROR("open");
   }
   ckpt_context();
   ckpt_memory();
-//   regularFile _regularFile;
-//   _regularFile.ckpt_fds();
+  // reserve space for 'fds_num', the number of file descriptors
+  fds_num_offset = lseek(ckptImage_fd, 0, SEEK_SET);
+  // lseek(ckptImage_fd, sizeof(int), 0);
+  fds_num = regularFD::writeFdsToCkptImg(ckptImage_fd);
+  fds_metadata_offset = lseek(ckptImage_fd, 0, SEEK_SET);
+  // lseek back and write the number of file descriptors
+  // before file descriptor metadata
+  lseek(ckptImage_fd, fds_num_offset, SEEK_SET);
+  if (write(ckptImage_fd, &fds_num, sizeof(int)) == -1) {
+    ERROR("write()");
+  }
+  // restore the 'ckptImage_fd' offset
+  lseek(ckptImage_fd, fds_metadata_offset, SEEK_SET);
 }
 
 void 

@@ -1,7 +1,13 @@
-#include <utils/utils.hpp>
-#include <myrestart.hpp>
+// FIXME: their should a class to store the offset,
+//        in the ckpt image, of:
+//        - context
+//        - memory maps
+//        - file descriptor metadata
 
-void foo(void){return;}
+// FIXME: These functions should in the above class
+void read_context();
+void read_memoryMaps();
+void read_fdMetadata();
 
 int main(int argc, char *argv[])
 {
@@ -101,6 +107,16 @@ int main(int argc, char *argv[])
     }
        
     memset(&msection, 0, sizeof(msection));
+  }
+  // read 'fds_num', the number of file descriptors
+  int fds_num;
+  if ((fds_num = read(myckpt_fd, &fds_num, sizeof(int))) == -1) {
+    ERROR("read()");
+  }
+  // read 'fd metadata' 
+  // FIXME: todo
+  for (int i=0; i<fds_num; ++i) {
+
   }
 
   if (close(myckpt_fd) == -1) {

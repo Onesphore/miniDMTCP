@@ -8,8 +8,8 @@
 
 class regularFD: virtual public fileDescriptor {
 private:
-  virtual int getFileDescriptors(fd_t* fds);
+  static virtual int getFileDescriptors(fd_t* fds);
 
 public:
-  virtual void writeFdsToCkptImg(int ckptImgFd, fd_t* fds, int num);
-}
+  static virtual int writeFdsToCkptImg(int ckptImgFd);
+};

@@ -2,6 +2,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#define ERROR(msg)    \
+do {                  \
+  perror(msg);        \
+  exit(EXIT_FAILURE); \
+} while(0);
+
 
 #define MAX_FD_NUM 256 // FIXME: should set this value to the actual number
 

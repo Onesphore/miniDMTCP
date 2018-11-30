@@ -1,4 +1,4 @@
-#include <utils.hpp>
+// #include <utils.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -8,7 +8,7 @@
 
 int
 regularFD::getFileDescriptors(fd_t* fds) {
-  char* fds_path = "/proc/self/fd/";
+  const char* fds_path = "/proc/self/fd/";
   int fds_num = 0;
   DIR *dir;
   struct dirent *dirEntry;          // directory entry
@@ -46,18 +46,20 @@ regularFD::getFileDescriptors(fd_t* fds) {
   return fds_num;
 }
 
-void
-writeFdsToCkptImg(int ckptImgFd) {
+int
+regularFD::writeFdsToCkptImg(int ckptImgFd) {
   int fds_num;                  // the number of file descriptors
   fd_t* fds;                    // pointer to file descriptor metadata
 
   fds = (fd_t*) malloc(MAX_FD_NUM * sizeof(fd_t));
   fds_num = getFileDescriptors(fds);
   for (int i=0; i<fds_num; ++i) {
-    if (write(ckptImgFd, fds[i], sizeof(fd_t)) == -1) {
+    if (write(ckptImgFd, &fds[i], sizeof(fd_t)) == -1) {
       ERROR("write()");
     }
   }
 
   free(fds);
+
+  return fds_num;
 }
