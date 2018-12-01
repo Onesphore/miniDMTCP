@@ -7,9 +7,18 @@
 #define MAX_FD_NUM 256 // FIXME: should set this value to the actual number
 
 class regularFD: virtual public fileDescriptor {
-private:
-  static virtual int getFileDescriptors(fd_t* fds);
-
 public:
-  static virtual int writeFdsToCkptImg(int ckptImgFd);
+  void writeFdToCkptImg(int ckptImgFd, off_t offset, fd_t fd_metadata);
+};
+
+// FIXME: this class should be in its own file
+class socketFD: virtual public fileDescriptor {
+public:
+  void writeFdToCkptImg(int ckptImgFd, off_t offset, fd_t fd_metadata);
+};
+
+// FIXME: this class should be in its own file
+class ptyFD: virtual public fileDescriptor {
+public:
+  void writeFdToCkptImg(int ckptImgFd, off_t offset, fd_t fd_metadata);
 };

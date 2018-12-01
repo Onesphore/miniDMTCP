@@ -25,9 +25,9 @@ _readline(int fd, char *line)
 
 
 void 
-fill_memsection(mem_section *msection_p, char *line)
+fill_memMap(memMap_t* memMap_ptr, char *line, off_t offset)
 {
-  memset(msection_p, 0, sizeof(mem_section));
+  memset(memMap_ptr, 0, sizeof(memMap_t));
   char *line_p = line;
   //1. get the address where this memory section begins
   char *addr_begin, *addr_end;
@@ -52,15 +52,15 @@ fill_memsection(mem_section *msection_p, char *line)
   }
   addr_end = hexstring_to_int(hex_str);
  
-  msection_p->address = addr_begin;
-  msection_p->size = (size_t) (addr_end - addr_begin);
+  memMap_ptr->v_addr = addr_begin;
+  memMap_ptr->size = (size_t) (addr_end - addr_begin);
  
   line_p++; // get past " "
 
   //3. get access mode: r/w/x
-  msection_p->readable = *line_p++;
-  msection_p->writable = *line_p++;
-  msection_p->executable = *line_p++;
+  memMap_ptr->readable = *line_p++;
+  memMap_ptr->writable = *line_p++;
+  memMap_ptr->executable = *line_p++;
 
   //4. check if this memory section is a stack region
   while (*line_p != 's' && *line_p != '\n')
@@ -69,7 +69,7 @@ fill_memsection(mem_section *msection_p, char *line)
   }
   if (*line_p == '\n')
   {
-    msection_p->is_stack = false;
+    memMap_ptr->is_stack = false;
     return;
   }  
 
@@ -85,12 +85,13 @@ fill_memsection(mem_section *msection_p, char *line)
     }
     *stack_str_p = 0;
     if (!strcmp(stack_str, "stack"))
-      msection_p->is_stack = true;
+      memMap_ptr->is_stack = true;
     
     return;
   }
 
-  msection_p->is_stack = false;
+  memMap_ptr->is_stack  = false;
+  memMap_ptr->file_addr = offset;
   return;
 }
 

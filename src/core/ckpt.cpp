@@ -24,24 +24,50 @@ void
 miniDMTCP::take_checkpoint(int signal) {
   off_t fds_num_offset = 0;
   off_t fds_metadata_offset = 0;
+
   if (( ckptImage_fd = open("myckpt.ckpt", O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR)) == -1) {
     ERROR("open");
   }
+  ckpt_h.context_off = sizeof(ckptImg_header)*2;
+  ckpt_h.memMapsHeader_off = ckpt_h.context_off + sizeof(ucontext_t);
+  ckpt_h.fdsMetadata_off = 2 * PGSIZE; // FIXME: check if it's big enough
+  ckpt_h.memMapsData_off = 4 * PGSIZE; // FIXME: check if it's big enough
+ 
   ckpt_context();
   ckpt_memory();
-  // reserve space for 'fds_num', the number of file descriptors
-  fds_num_offset = lseek(ckptImage_fd, 0, SEEK_SET);
-  // lseek(ckptImage_fd, sizeof(int), 0);
-  fds_num = regularFD::writeFdsToCkptImg(ckptImage_fd);
-  fds_metadata_offset = lseek(ckptImage_fd, 0, SEEK_SET);
-  // lseek back and write the number of file descriptors
-  // before file descriptor metadata
-  lseek(ckptImage_fd, fds_num_offset, SEEK_SET);
-  if (write(ckptImage_fd, &fds_num, sizeof(int)) == -1) {
+
+  off_t fd_metadata_off = ckpt_h.fdsMetadata_off;  
+  // file descriptors
+  fd_t* fds_ptr;
+  fileDescriptor* fileDescr_ptr;
+  int fds_num;
+  fileDescriptor::getFileDescriptors(&fds_ptr, &fds_num);
+  for (int i=0; i<fds_num; ++i) {
+    switch (fds_ptr[i].fd_type) {
+      case REGULAR:
+	fileDescr_ptr = new regularFD();
+        break;
+
+      case SOCKET:
+	fileDescr_ptr = new socketFD();
+	break;
+
+      case PTY:
+	fileDescr_ptr = new ptyFD();
+	break;
+    }
+
+    fileDescr_ptr->writeFdToCkptImg(ckptImage_fd, fd_metadata_off, fds_ptr[i]);
+    fd_metadata_off += sizeof(fd_t);
+  }
+
+  ckpt_h.fdsMetadataNum = fds_num;
+  if (lseek(ckptImage_fd, 0, SEEK_SET) == (off_t)-1) {
+    ERROR("lseek()");
+  }
+  if (write(ckptImage_fd, &ckpt_h, sizeof(ckptImg_header)) == -1) {
     ERROR("write()");
   }
-  // restore the 'ckptImage_fd' offset
-  lseek(ckptImage_fd, fds_metadata_offset, SEEK_SET);
 }
 
 void 
@@ -51,69 +77,74 @@ miniDMTCP::ckpt_context() {
   if (getcontext(&context) == -1) {
     ERROR("getcontext()");
   }
-  // to avoid taking a ckpt again on 'restart'
-  if (pid == getpid()){
+
+  if (pid == getpid()){ // to avoid taking a ckpt again on 'restart'
+    if (lseek(ckptImage_fd, ckpt_h.context_off, SEEK_SET) == (off_t)-1) {
+      ERROR("lseek()");
+    }
     if (write(ckptImage_fd, &context, sizeof(context)) == -1) {
       ERROR("write()");
     }
   }
-
 }
 
 void 
 miniDMTCP::ckpt_memory() {
-    int maps_fd;
-    if ((maps_fd = open("/proc/self/maps", O_RDONLY)) == -1) {
-      ERROR("open()");
-    } 
-    // leave space for the magic number, 'number_of_mem_sections':)
-    if (lseek(ckptImage_fd, sizeof(int), SEEK_CUR) == (off_t)-1) {
+  int maps_fd;
+  char line[128];
+  memMap_t memMap;
+  off_t memMaps_off;
+  off_t memMaps_data_off;
+  int memMaps_num = 0;
+  char* access_limit = (char*) (long long)0xf000000000000000;
+
+  if ((maps_fd = open("/proc/self/maps", O_RDONLY)) == -1) {
+    ERROR("open()");
+  }
+ 
+  memMaps_off      = ckpt_h.memMapsHeader_off;
+  memMaps_data_off = ckpt_h.memMapsData_off;
+  while (_readline(maps_fd, line) != -1) {
+    if (is_vvar_line(line) || is_vdso_line(line) || is_vsyscall_line(line) ||
+        is_skip_region(line)) {
+      continue;
+    }
+    fill_memMap(&memMap, line, memMaps_data_off);
+    if (memMap.v_addr > access_limit) {
+      continue;
+    }
+    
+    // write mem. map metadata to ckpt image
+    if (lseek(ckptImage_fd, memMaps_off, SEEK_SET) == (off_t)-1) {
       ERROR("lseek()");
     }
+    if (write(ckptImage_fd, &memMap, sizeof(memMap_t)) == -1) {
+      ERROR("write()");
+    }
 
-    char line[128];
-    mem_section msection;
-    int section_nbr = 0;
-    void *access_limit = (void *)(long long)0xf000000000000000;
-
-    while (_readline(maps_fd, line) != -1) {
-      // check if it's any of the region we don't need to write
-      // to the ckpt image file.
-      if (is_vvar_line(line) || is_vdso_line(line) || is_vsyscall_line(line) ||
-	  is_skip_region(line)) {
-        continue;
-      }
-
-      fill_memsection(&msection, line);
-      if (msection.address > access_limit) {
-        continue;
-      }
-      section_nbr++;
-      if (write(ckptImage_fd, &msection, sizeof(msection)) == -1) {
-        ERROR("write()");
-      }   
-      
+    // write mem. map data to ckpt image
+    if (lseek(ckptImage_fd, memMaps_data_off, SEEK_SET) == (off_t)-1) {
+      ERROR("lseek()");
+    }
+    {
       int nread = 0;
       int read_total=0;
-      while (read_total != msection.size){
-        if ((nread = write(ckptImage_fd, msection.address+read_total, 
-              msection.size-read_total)) == -1) {
-	  ERROR("write()");
+      while (read_total != memMap.size){
+        if ((nread = write(ckptImage_fd, memMap.v_addr+read_total, 
+              memMap.size-read_total)) == -1) {
+          ERROR("write()");
         }
         read_total += nread;
       }
     }
 
-    if (lseek(ckptImage_fd, sizeof(context), SEEK_SET) == (off_t)-1) {
-      ERROR("lseek()");
-    } 
-    // section_nbr: the number of memory sections written to 
-    // the ckpt image file. Save this number also.
-    if (write(ckptImage_fd, &section_nbr, sizeof(section_nbr)) == -1) {
-      ERROR("write()");
-    }
-
-    if (close(maps_fd) == -1) {
-      ERROR("close()");
-    }
+    memMaps_off += sizeof(memMap_t);
+    memMaps_data_off += memMap.size;
+    memMaps_num++;
+  }
+  ckpt_h.memMapsNum = memMaps_num;
+  
+  if (close(maps_fd) == -1) {
+    ERROR("close()");
+  }
 }
