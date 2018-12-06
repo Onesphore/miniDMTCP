@@ -1,3 +1,6 @@
+#ifndef FD_UTILS_COMMON_HPP
+#define FD_UTILS_COMMON_HPP
+
 #include <dirent.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,21 +19,21 @@ do {                  \
 
 // FIXME: the structure of the class below must be redesigned.
 
-enum fileDescr_type {
-  REGULAR = 1,
-  SOCKET,
-  PTY
-};
+// enum fileDescr_type {
+//   REGULAR = 1,
+//   SOCKET,
+//   PTY
+// };
 
-struct fd_t {
-  int            fd_no;
-  char           fd_name[256];
-  fileDescr_type fd_type;
-  bool           fd_r;
-  bool           fd_w;
-  bool           fd_x;
-  off_t          offset;
-};
+// struct fd_t {
+//   int            fd_no;
+//   char           fd_name[256];
+//   fileDescr_type fd_type;
+//   bool           fd_r;
+//   bool           fd_w;
+//   bool           fd_x;
+//   off_t          offset;
+// };
 
 // This class will be inherited by each type of file descriptor
 class fileDescriptor {
@@ -61,7 +64,7 @@ fileDescriptor::getFileDescriptors(fd_t** fds_ptr, int* fds_num_ptr) {
       if (strcmp(dirEntry->d_name, "..") == 0) {
         continue;
       }
-      if ((uint32_t)atoi(dirEntry->d_name) < 3) { // skip stdin, stdout, stderr
+      if ((uint32_t)atoi(dirEntry->d_name) != 3) { // skip stdin, stdout, stderr
         continue;
       }
       strcpy(path+strlen(fds_path), dirEntry->d_name);
@@ -73,6 +76,7 @@ fileDescriptor::getFileDescriptors(fd_t** fds_ptr, int* fds_num_ptr) {
 	   lseek(atoi(dirEntry->d_name), 0, SEEK_SET)) == (off_t)-1) {
         ERROR("lseek()");
       }
+      (*fds_ptr)[fds_num].fd_type = REGULAR;
       fds_num++;
     }
     closedir(dir);
@@ -82,3 +86,5 @@ fileDescriptor::getFileDescriptors(fd_t** fds_ptr, int* fds_num_ptr) {
 
   *fds_num_ptr = fds_num;
 }
+
+#endif //  FD_UTILS_COMMON_HPP

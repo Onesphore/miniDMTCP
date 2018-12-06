@@ -24,6 +24,7 @@ _readline(int fd, char *line)
 }
 
 
+// FIXME: do we need 'offset'
 void 
 fill_memMap(memMap_t* memMap_ptr, char *line, off_t offset)
 {
@@ -52,15 +53,26 @@ fill_memMap(memMap_t* memMap_ptr, char *line, off_t offset)
   }
   addr_end = hexstring_to_int(hex_str);
  
-  memMap_ptr->v_addr = addr_begin;
-  memMap_ptr->size = (size_t) (addr_end - addr_begin);
+  memMap_ptr->vaddr = addr_begin;
+  memMap_ptr->data_size = (size_t) (addr_end - addr_begin);
  
   line_p++; // get past " "
 
   //3. get access mode: r/w/x
-  memMap_ptr->readable = *line_p++;
-  memMap_ptr->writable = *line_p++;
-  memMap_ptr->executable = *line_p++;
+  char permissions = 0;
+  if (*line_p++ = 'r') {
+    permissions = permissions | 1;
+  }
+  if (*line_p++ = 'w') {
+    permissions = permissions | (1 << 1);
+  }
+  if (*line_p++ = 'x') {
+    permissions = permissions | (1 << 2);
+  }
+  memMap_ptr->permissions = permissions;
+//   memMap_ptr->readable = *line_p++;
+//   memMap_ptr->writable = *line_p++;
+//   memMap_ptr->executable = *line_p++;
 
   //4. check if this memory section is a stack region
   while (*line_p != 's' && *line_p != '\n')
@@ -74,6 +86,7 @@ fill_memMap(memMap_t* memMap_ptr, char *line, off_t offset)
   }  
 
 
+  // FIXME: not really robust
   if (*line_p == 's')
   {
     char stack_str[6];
@@ -84,14 +97,16 @@ fill_memMap(memMap_t* memMap_ptr, char *line, off_t offset)
       *stack_str_p++ = *line_p++;
     }
     *stack_str_p = 0;
-    if (!strcmp(stack_str, "stack"))
-      memMap_ptr->is_stack = true;
+    if (!strcmp(stack_str, "stack")) {
+      memMap_ptr->is_stack    = true;
+      memMap_ptr->data_offset = offset;
+    }
     
     return;
   }
 
-  memMap_ptr->is_stack  = false;
-  memMap_ptr->file_addr = offset;
+  memMap_ptr->is_stack    = false;
+  memMap_ptr->data_offset = offset;
   return;
 }
 

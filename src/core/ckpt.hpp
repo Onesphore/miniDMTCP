@@ -12,6 +12,7 @@
 #include <ucontext.h>
 #include <setjmp.h>
 #include <limits.h>
+#include <common/ckptImage.hpp>
 #include <utils/utils.hpp>
 
 #define SIGNUM SIGUSR2 
@@ -27,12 +28,10 @@ class miniDMTCP {
     static void ckpt_context();
     static void ckpt_memory();
     static void post_ckpting();
-    // static void ckpt_fds();           // should be a plugin
+
   private:
-    static int ckptImage_fd;
-    static int fds_num;
-    static ckptImg_header ckpt_h;
-    
+    static ckpt_header_t ckpt_h;
+    static ucontext_t context;   
   public:
     static void take_checkpoint(int);
   public:
@@ -41,8 +40,7 @@ class miniDMTCP {
 };
 
 miniDMTCP miniDMTCP::theInstance;
-int miniDMTCP::ckptImage_fd = -1;
-ckptImg_header miniDMTCP::ckpt_h;
-int miniDMTCP::fds_num;
+ckpt_header_t miniDMTCP::ckpt_h;
+ucontext_t miniDMTCP::context;
 
 #endif // CKPT_HPP

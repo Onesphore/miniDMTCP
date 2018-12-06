@@ -1,38 +1,44 @@
 #include <myrestart.hpp>
 
 void foo(void){return;}
+inline void move_stack();
 
 int main(int argc, char *argv[])
 {
-  // './myrestart myckpt.ckpt' should be the command
+  static int ckpt_img_fd;
+  static ckpt_header_t ckpt_h;
+
   assert(argc == 2);
-  strcpy(Restart::theInstance.ckptImage_fileName, argv[1]);
-  Restart::theInstance.move_stack();
-  Restart::theInstance.restore_memoryMaps();
-  Restart::theInstance.restore_fds();
-  Restart::theInstance.restore_context();
+  
+  if ((ckpt_img_fd = open(argv[1], O_RDONLY)) == -1) {
+    ERROR("open()");
+  }
+  if (read(ckpt_img_fd, &ckpt_h, sizeof(ckpt_header_t)) == -1) {
+    ERROR("read()");
+  }
+  // Restart::move_stack();
+  move_stack();
+  Restart::restore_memoryMaps(ckpt_img_fd, ckpt_h);
+  // Restart::restore_fds(ckpt_img_fd, ckpt_h);
+  Restart::restore_context(ckpt_img_fd, ckpt_h);
 
   return 0;
 }
 
-void
-Restart::move_stack() {
+inline void
+move_stack() {
   // FIXME: should the following vars be declared 'static'?
   //        for now I don't see why they should
-  char *new_stack_addr = (char *)0x6700100; //
-  size_t new_stack_size = 0x6701000-0x6700000;
+  static char *new_stack_addr = (char *)0x6700100; //
+  static size_t new_stack_size = 0x6701000-0x6700000;
   if (mmap((void *)0x6700000, new_stack_size, PROT_READ|PROT_WRITE, 
       MAP_ANONYMOUS|MAP_PRIVATE, -1, 0) == (void *)-1) 
   {
     ERROR("mmap()");
   }
   asm volatile ("mov %0,%%rsp;" : : "g" (new_stack_addr) : "memory");
-  Restart::theInstance.foo();
+  Restart::foo();
   
-  // FIXME: too much 'static'
-  //        we only changed 'sp' register's content, not 'fp'.
-  //        It should not matter that some variable are still in 
-  //        old stack.
   int maps_fd = open("/proc/self/maps", O_RDONLY);
   char *old_stack_addr;
   size_t old_stack_size;
@@ -74,29 +80,19 @@ Restart::move_stack() {
  
 }
 
-// FIXME: first change the format of the ckpt image
 void
-Restart::restore_memoryMaps() {
-  int   ckptImage_fd;
+Restart::restore_memoryMaps(int fd, ckpt_header_t ckpt_h) {
+  // int   ckptImage_fd;
   off_t context_off;
-  off_t memMapsHeader_off;
-  off_t memMapsData_off;
+  off_t memMaps_off;
+  off_t memData_off;
   int   memMaps_num;
+  
+  int ckptImage_fd = fd;
 
-  if ((ckptImage_fd = open(Restart::theInstance.ckptImage_fileName, 
-				                   O_RDONLY)) == -1) {
-    ERROR("open()");
-  }
-
-  // read the ckpt image header
-  ckptImg_header ckpt_h;
-  if (read(ckptImage_fd, &ckpt_h, sizeof(ckptImg_header)) == -1) {
-    ERROR("read()");
-  }
-  // context_off       = ckpt_h.context_off;
-  memMapsHeader_off = ckpt_h.memMapsHeader_off;
-  memMaps_num       = ckpt_h.memMapsNum;
-  memMapsData_off   = ckpt_h.memMapsData_off;
+  memMaps_off = ckpt_h.memMaps_offset;
+  memMaps_num = ckpt_h.memMaps_num;
+  memData_off   = ckpt_h.memData_offset;
   
 
   static memMap_t memMap;
@@ -105,31 +101,28 @@ Restart::restore_memoryMaps() {
   static int i;
   for (i=1; i<=memMaps_num; ++i) {
     // read the ith memory section into memMap
-    if (lseek(ckptImage_fd, memMapsHeader_off, SEEK_SET) == (off_t)-1) {
+    if (lseek(ckptImage_fd, memMaps_off, SEEK_SET) == (off_t)-1) {
       ERROR("lseek()");
     }
-    memMapsHeader_off += sizeof(memMap_t);
+    memMaps_off += sizeof(memMap_t);
+
     if (read(ckptImage_fd, &memMap, sizeof(memMap_t)) == -1) {
       ERROR("read()");
-    }
-         
-    // map the ith mem section into the virtual memory.
-    // for now give all region write permission so that
-    // they can be written to. 
+    }     
     prot = prot | PROT_WRITE;
-    if (memMap.executable == true)
+    if (memMap.permissions & (1<<2) == (1<<2))
       prot = prot | PROT_EXEC;    
 
-    if (mmap(memMap.v_addr, memMap.size, prot, flags, 
+    if (mmap(memMap.vaddr, memMap.data_size, prot, flags, 
                                       -1, 0) == (void *)-1)
     {
       ERROR("mmap()");
     }
-    if (lseek(ckptImage_fd, memMapsData_off, SEEK_SET) == (off_t)-1) {
+    if (lseek(ckptImage_fd, memData_off, SEEK_SET) == (off_t)-1) {
       ERROR("lseek()");
     }
-    memMapsData_off += memMap.size;
-    if (read(ckptImage_fd, memMap.v_addr, memMap.size) == -1) {
+    memData_off += memMap.data_size;
+    if (read(ckptImage_fd, memMap.vaddr, memMap.data_size) == -1) {
       ERROR("write()");
     }
        
@@ -137,11 +130,8 @@ Restart::restore_memoryMaps() {
   }
 }
 
-void Restart::restore_fds() {
 
-}
-
-void Restart::restore_context() {
+void Restart::restore_context(int fd, ckpt_header_t ckpt_h) {
 
 }
 // =====================================================================================
